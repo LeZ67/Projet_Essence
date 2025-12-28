@@ -1,0 +1,322 @@
+# ==========================================
+# CODE COMPLET STATION ESSENCE (CORRIGÉ)
+# ==========================================
+
+library(shiny)
+library(shinyjs)
+library(httr)
+library(jsonlite)
+library(dplyr)
+library(leaflet)
+
+# ==========================================
+# INTERFACE UTILISATEUR (UI)
+# ==========================================
+ui <- fluidPage(
+  useShinyjs(), # Indispensable pour que le bouton Google Maps fonctionne
+  
+  # Petit ajout de style pour faire propre
+  tags$head(
+    tags$style(HTML("
+      .well { background-color: #f9f9f9; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+      #station_info { font-weight: bold; color: #2c3e50; font-family: monospace; }
+    "))
+  ),
+  
+  titlePanel(div(icon("gas-pump"), " Comparateur Carburant & Trajet")),
+  
+  sidebarLayout(
+    sidebarPanel(
+      width = 3,
+      textInput("adresse", "📍 Votre adresse de départ :", 
+                placeholder = "Ex: 1 Rue de Rivoli, Paris"),
+      
+      selectInput("carburant", "⛽ Type de carburant :",
+                  choices = c("Gazole" = "Gazole",
+                              "SP95" = "SP95",
+                              "SP98" = "SP98",
+                              "E10" = "E10",
+                              "E85" = "E85",
+                              "GPLc" = "GPLc")),
+      
+      sliderInput("rayon", "📏 Rayon de recherche (km) :",
+                  min = 2, max = 50, value = 15, step = 1),
+      
+      numericInput("conso", "🚗 Consommation (L/100km) :",
+                   value = 7, min = 1, max = 25, step = 0.5),
+      
+      actionButton("chercher", "Lancer la recherche", class = "btn-primary btn-block"),
+      
+      hr(),
+      
+      h4("Station sélectionnée :"),
+      verbatimTextOutput("station_info"),
+      
+      actionButton("gmaps", "Ouvrir GPS (Google Maps)", class = "btn-success btn-block")
+    ),
+    
+    mainPanel(
+      width = 9,
+      tabsetPanel(
+        tabPanel("🗺️ Carte", leafletOutput("carte", height = "700px")),
+        tabPanel("📊 Résultats Détaillés", 
+                 h4("Top 10 des stations les plus rentables (Prix + Trajet A/R)"),
+                 tableOutput("resultats"),
+                 p(style="color:gray; font-size:0.8em;", "*Le coût total inclut un plein de 50L + le coût du carburant pour faire l'aller-retour."))
+      )
+    )
+  )
+)
+
+# ==========================================
+# SERVEUR
+# ==========================================
+server <- function(input, output, session) {
+  
+  # --- Variables Réactives ---
+  coords_depart <- reactiveVal(NULL)
+  stations_data <- reactiveVal(NULL)
+  station_selectionnee <- reactiveVal(NULL) 
+  
+  # --- 1. Géocodage (Nominatim) ---
+  geocoder <- function(adresse) {
+    tryCatch({
+      url <- "https://nominatim.openstreetmap.org/search"
+      resp <- GET(url, query = list(q = adresse, format = "json", limit = 1),
+                  user_agent("FuelFinderApp/1.0"))
+      
+      if (status_code(resp) == 200) {
+        data <- fromJSON(content(resp, "text", encoding = "UTF-8"))
+        if (length(data) > 0) {
+          return(list(lat = as.numeric(data$lat[1]), 
+                      lon = as.numeric(data$lon[1])))
+        }
+      }
+      return(NULL)
+    }, error = function(e) return(NULL))
+  }
+  
+  # --- 2. API Stations (Avec filtre géographique serveur) ---
+  get_stations_api <- function(lat, lon, rayon_km) {
+    tryCatch({
+      base_url <- "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records"
+      
+      # Filtre ODSQL pour ne télécharger QUE les stations proches
+      geo_filter <- sprintf("distance(geom, geom'POINT(%f %f)', %dkm)", 
+                            lon, lat, rayon_km)
+      
+      resp <- GET(base_url, query = list(
+        where = geo_filter,
+        limit = 60 # On prend large
+      ), timeout(10))
+      
+      if (status_code(resp) == 200) {
+        json_data <- fromJSON(content(resp, "text", encoding = "UTF-8"))
+        if (!is.null(json_data$results) && length(json_data$results) > 0) {
+          return(json_data$results)
+        }
+      }
+      return(NULL)
+    }, error = function(e) {
+      print(paste("Erreur API:", e$message))
+      return(NULL)
+    })
+  }
+  
+  # --- 3. Distance Routière (OSRM) ---
+  distance_voiture <- function(lon1, lat1, lon2, lat2) {
+    tryCatch({
+      url <- sprintf("http://router.project-osrm.org/route/v1/driving/%f,%f;%f,%f?overview=false",
+                     lon1, lat1, lon2, lat2)
+      
+      resp <- GET(url, timeout(3)) 
+      if (status_code(resp) == 200) {
+        data <- fromJSON(content(resp, "text"))
+        if (!is.null(data$routes) && length(data$routes) > 0) {
+          return(data$routes$distance[1] / 1000) 
+        }
+      }
+      return(NA) 
+    }, error = function(e) return(NA))
+  }
+  
+  # --- 4. Calcul Coût ---
+  calculer_cout <- function(prix_L, dist_km, conso_100) {
+    trajet_AR_km <- dist_km * 2
+    litres_conso <- (trajet_AR_km * conso_100) / 100
+    cout_plein <- 50 * prix_L 
+    return(cout_plein + (litres_conso * prix_L))
+  }
+  
+  # --- LOGIQUE PRINCIPALE ---
+  observeEvent(input$chercher, {
+    req(input$adresse)
+    
+    withProgress(message = 'Recherche en cours...', value = 0, {
+      
+      # A. Géocodage
+      coords <- geocoder(input$adresse)
+      if (is.null(coords)) {
+        showNotification("Adresse introuvable.", type = "error")
+        return()
+      }
+      coords_depart(coords)
+      incProgress(0.2, detail = "Récupération des prix...")
+      
+      # B. API Data
+      raw_data <- get_stations_api(coords$lat, coords$lon, input$rayon)
+      
+      if (is.null(raw_data)) {
+        showNotification("Aucune station trouvée dans ce rayon.", type = "warning")
+        stations_data(NULL)
+        return()
+      }
+      
+      # C. Nettoyage Robuste (Le correctif anti-crash)
+      df <- raw_data
+      
+      # Initialisation des colonnes lat/lon finales
+      df$lat_final <- NA
+      df$lon_final <- NA
+      
+      # Méthode 1 : Colonnes directes (souvent présentes)
+      if ("latitude" %in% names(df) && "longitude" %in% names(df)) {
+        df$lat_final <- as.numeric(df$latitude)
+        df$lon_final <- as.numeric(df$longitude)
+      }
+      
+      # Méthode 2 : Fallback sur 'geom' si Méthode 1 a échoué pour certaines lignes
+      mask_na <- is.na(df$lat_final) | is.na(df$lon_final)
+      if (any(mask_na) && !is.null(df$geom$geometry$coordinates)) {
+        coords_list <- df$geom$geometry$coordinates
+        
+        # Extraction sécurisée liste par liste
+        df$lon_final[mask_na] <- sapply(coords_list[mask_na], function(x) if(length(x)>=1) as.numeric(x[1]) else NA)
+        df$lat_final[mask_na] <- sapply(coords_list[mask_na], function(x) if(length(x)>=2) as.numeric(x[2]) else NA)
+      }
+      
+      # On met à jour
+      df$latitude <- df$lat_final
+      df$longitude <- df$lon_final
+      
+      # Extraction du Prix (Gère "nom" et "nom_carburant")
+      df$prix_actuel <- sapply(df$carburants_prix, function(x) {
+        if (is.null(x) || !is.data.frame(x)) return(NA)
+        
+        col_nom <- if("nom" %in% names(x)) "nom" else "nom_carburant"
+        if (col_nom %in% names(x)) {
+          res <- x[x[[col_nom]] == input$carburant, "valeur"]
+          if (length(res) > 0) return(as.numeric(res[1]))
+        }
+        return(NA)
+      })
+      
+      # Filtrage strict : on vire ce qui est incomplet
+      df_clean <- df %>% 
+        filter(!is.na(prix_actuel), !is.na(latitude), !is.na(longitude)) %>%
+        select(id, adresse, ville, latitude, longitude, prix_actuel)
+      
+      if (nrow(df_clean) == 0) {
+        showNotification("Stations trouvées, mais pas de prix pour ce carburant.", type = "warning")
+        return()
+      }
+      
+      incProgress(0.4, detail = "Calcul des distances...")
+      
+      # D. Calcul Routier (Optimisé)
+      # 1. Tri "vol d'oiseau"
+      df_clean$dist_oiseau <- sqrt((df_clean$latitude - coords$lat)^2 + 
+                                     (df_clean$longitude - coords$lon)^2)
+      
+      # 2. On garde les 10 meilleures pour ne pas surcharger OSRM
+      df_top <- df_clean %>% arrange(dist_oiseau) %>% head(10)
+      df_top$dist_route <- NA
+      
+      # 3. Boucle OSRM
+      for(i in 1:nrow(df_top)) {
+        d <- distance_voiture(coords$lon, coords$lat, df_top$longitude[i], df_top$latitude[i])
+        
+        if (is.na(d)) {
+          # Fallback : Vol d'oiseau * 1.3 si OSRM échoue
+          df_top$dist_route[i] <- (df_top$dist_oiseau[i] * 111) * 1.3 
+        } else {
+          df_top$dist_route[i] <- d
+        }
+        incProgress(0.4/10)
+        Sys.sleep(0.2) # Pause anti-ban
+      }
+      
+      # E. Finalisation
+      df_final <- df_top %>%
+        rowwise() %>%
+        mutate(cout_total = calculer_cout(prix_actuel, dist_route, input$conso)) %>%
+        ungroup() %>%
+        arrange(cout_total)
+      
+      stations_data(df_final)
+      station_selectionnee(df_final[1,])
+    })
+  })
+  
+  # --- CARTE (Leaflet) ---
+  output$carte <- renderLeaflet({
+    req(coords_depart(), stations_data())
+    pos <- coords_depart()
+    data <- stations_data()
+    best <- data[1,]
+    
+    leaflet() %>%
+      addTiles() %>%
+      addMarkers(lng = pos$lon, lat = pos$lat, popup = "Départ",
+                 icon = makeIcon("https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png", 25, 41)) %>%
+      addMarkers(data = data, lng = ~longitude, lat = ~latitude, layerId = ~id,
+                 popup = ~paste0("<b>", ville, "</b><br>", adresse, "<br>Prix: ", prix_actuel, " €"),
+                 icon = makeIcon("https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png", 25, 41)) %>%
+      addPolylines(lng = c(pos$lon, best$longitude), lat = c(pos$lat, best$latitude),
+                   color = "blue", weight = 2, dashArray = "5,5")
+  })
+  
+  # Clic Carte
+  observeEvent(input$carte_marker_click, {
+    click <- input$carte_marker_click
+    data <- stations_data()
+    if(!is.null(data)) {
+      stat <- data %>% filter(id == click$id)
+      if(nrow(stat) > 0) station_selectionnee(stat[1,])
+    }
+  })
+  
+  # Tableau
+  output$resultats <- renderTable({
+    req(stations_data())
+    stations_data() %>%
+      select("Ville" = ville, "Prix (€/L)" = prix_actuel, "Dist (km)" = dist_route, "Total (€)" = cout_total)
+  }, digits = 3)
+  
+  # Texte Info
+  output$station_info <- renderText({
+    req(station_selectionnee())
+    s <- station_selectionnee()
+    paste0(s$adresse, " - ", s$ville, "\n",
+           "Prix : ", s$prix_actuel, " €/L\n",
+           "Distance : ", round(s$dist_route, 1), " km\n",
+           "Coût Total : ", round(s$cout_total, 2), " €")
+  })
+  
+  # Bouton Google Maps
+  observeEvent(input$gmaps, {
+    req(coords_depart(), station_selectionnee())
+    origin <- coords_depart()
+    dest <- station_selectionnee()
+    
+    # URL Officielle
+    url <- sprintf("https://www.google.com/maps/dir/?api=1&origin=%f,%f&destination=%f,%f&travelmode=driving",
+                   origin$lat, origin$lon, dest$latitude, dest$longitude)
+    
+    # Utilisation correcte de shinyjs
+    shinyjs::runjs(paste0("window.open('", url, "', '_blank');"))
+  })
+}
+
+# Lancer l'application
+shinyApp(ui = ui, server = server)
