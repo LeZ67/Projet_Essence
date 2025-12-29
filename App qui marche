@@ -1,0 +1,479 @@
+# ==========================================
+# CODE CORRIGÉ STATION ESSENCE - ITINÉRAIRE ROUTIER
+# ==========================================
+
+library(shiny)
+library(shinyjs)
+library(httr)
+library(jsonlite)
+library(dplyr)
+library(leaflet)
+
+# ==========================================
+# INTERFACE UTILISATEUR (UI)
+# ==========================================
+ui <- fluidPage(
+  useShinyjs(),
+  
+  tags$head(
+    tags$style(HTML("
+      .well { background-color: #f9f9f9; border: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+      #station_info { font-weight: bold; color: #2c3e50; font-family: monospace; }
+    "))
+  ),
+  
+  titlePanel(div(icon("gas-pump"), " Comparateur Carburant & Trajet")),
+  
+  sidebarLayout(
+    sidebarPanel(
+      width = 3,
+      textInput("adresse", "📍 Votre adresse de départ :", 
+                placeholder = "Ex: 1 Rue de Rivoli, Paris"),
+      
+      selectInput("carburant", "⛽ Type de carburant :",
+                  choices = c("Gazole" = "Gazole",
+                              "SP95" = "SP95",
+                              "SP98" = "SP98",
+                              "E10" = "E10",
+                              "E85" = "E85",
+                              "GPLc" = "GPLc")),
+      
+      sliderInput("rayon", "📏 Rayon de recherche (km) :",
+                  min = 2, max = 50, value = 15, step = 1),
+      
+      numericInput("conso", "🚗 Consommation (L/100km) :",
+                   value = 7, min = 1, max = 25, step = 0.5),
+      
+      actionButton("chercher", "Lancer la recherche", class = "btn-primary btn-block"),
+      
+      hr(),
+      
+      h4("Station sélectionnée :"),
+      verbatimTextOutput("station_info"),
+      
+      actionButton("gmaps", "Ouvrir GPS (Google Maps)", class = "btn-success btn-block")
+    ),
+    
+    mainPanel(
+      width = 9,
+      tabsetPanel(
+        tabPanel("🗺️ Carte", leafletOutput("carte", height = "700px")),
+        tabPanel("📊 Résultats Détaillés", 
+                 h4("Top 10 des stations les plus rentables (Prix + Trajet A/R)"),
+                 tableOutput("resultats"),
+                 p(style="color:gray; font-size:0.8em;", "*Le coût total inclut un plein de 50L + le coût du carburant pour faire l'aller-retour."))
+      )
+    )
+  )
+)
+
+# ==========================================
+# SERVEUR
+# ==========================================
+server <- function(input, output, session) {
+  
+  coords_depart <- reactiveVal(NULL)
+  stations_data <- reactiveVal(NULL)
+  station_selectionnee <- reactiveVal(NULL)
+  itineraire_geometrie <- reactiveVal(NULL)
+  
+  # --- Géocodage ---
+  geocoder <- function(adresse) {
+    tryCatch({
+      url <- "https://nominatim.openstreetmap.org/search"
+      resp <- GET(url, query = list(q = adresse, format = "json", limit = 1),
+                  user_agent("FuelFinderApp/1.0"))
+      
+      if (status_code(resp) == 200) {
+        data <- fromJSON(content(resp, "text", encoding = "UTF-8"))
+        if (length(data) > 0) {
+          return(list(lat = as.numeric(data$lat[1]), 
+                      lon = as.numeric(data$lon[1])))
+        }
+      }
+      return(NULL)
+    }, error = function(e) {
+      print(paste("Erreur géocodage:", e$message))
+      return(NULL)
+    })
+  }
+  
+  # --- API Stations SIMPLIFIÉE ---
+  get_stations_api <- function(lat, lon, rayon_km) {
+    tryCatch({
+      base_url <- "https://data.economie.gouv.fr/api/explore/v2.1/catalog/datasets/prix-des-carburants-en-france-flux-instantane-v2/records"
+      
+      geo_filter <- sprintf("distance(geom, geom'POINT(%f %f)', %dkm)", 
+                            lon, lat, rayon_km)
+      
+      resp <- GET(base_url, query = list(
+        where = geo_filter,
+        limit = 100
+      ), timeout(15))
+      
+      if (status_code(resp) != 200) {
+        print(paste("Erreur HTTP:", status_code(resp)))
+        return(NULL)
+      }
+      
+      # Récupération du texte brut
+      text_content <- content(resp, "text", encoding = "UTF-8")
+      
+      # Parse JSON sans simplification
+      json_data <- fromJSON(text_content, simplifyVector = TRUE, simplifyDataFrame = TRUE)
+      
+      if (is.null(json_data$results) || nrow(json_data$results) == 0) {
+        print("Aucun résultat dans l'API")
+        return(NULL)
+      }
+      
+      return(json_data$results)
+      
+    }, error = function(e) {
+      print(paste("Erreur API:", e$message))
+      return(NULL)
+    })
+  }
+  
+  # --- Extraction coordonnées ROBUSTE ---
+  extraire_coords <- function(station_row) {
+    lat <- NA
+    lon <- NA
+    
+    # Méthode 1: colonnes lat/lon directes (format WGS84)
+    if ("lat" %in% names(station_row) && !is.na(station_row$lat)) {
+      lat <- as.numeric(station_row$lat)
+    }
+    if ("lon" %in% names(station_row) && !is.na(station_row$lon)) {
+      lon <- as.numeric(station_row$lon)
+    }
+    
+    # Méthode 2: latitude/longitude
+    if (is.na(lat) && "latitude" %in% names(station_row) && !is.na(station_row$latitude)) {
+      lat_val <- as.numeric(station_row$latitude)
+      # Conversion Lambert → WGS84 si nécessaire (format 4806500 = 48.065°)
+      if (!is.na(lat_val) && lat_val > 1000) {
+        lat <- lat_val / 100000
+      } else {
+        lat <- lat_val
+      }
+    }
+    if (is.na(lon) && "longitude" %in% names(station_row) && !is.na(station_row$longitude)) {
+      lon_val <- as.numeric(station_row$longitude)
+      if (!is.na(lon_val) && abs(lon_val) > 1000) {
+        lon <- lon_val / 100000
+      } else {
+        lon <- lon_val
+      }
+    }
+    
+    # Méthode 3: geom
+    if ((is.na(lat) || is.na(lon)) && "geom" %in% names(station_row)) {
+      geom <- station_row$geom
+      
+      if (is.data.frame(geom) && "lon" %in% names(geom) && "lat" %in% names(geom)) {
+        lon <- as.numeric(geom$lon[1])
+        lat <- as.numeric(geom$lat[1])
+      }
+      else if (is.list(geom) && "geometry" %in% names(geom)) {
+        geometry <- geom$geometry
+        if (is.list(geometry) && "coordinates" %in% names(geometry)) {
+          coords <- geometry$coordinates
+          if (is.list(coords) && length(coords) >= 2) {
+            lon <- as.numeric(coords[[1]])
+            lat <- as.numeric(coords[[2]])
+          } else if (is.numeric(coords) && length(coords) >= 2) {
+            lon <- coords[1]
+            lat <- coords[2]
+          }
+        }
+      }
+    }
+    
+    return(list(lat = lat, lon = lon))
+  }
+  
+  # --- Extraction prix CORRIGÉE ---
+  extraire_prix <- function(station_row, type_carburant) {
+    # L'API a des colonnes directes : gazole_prix, sp95_prix, e10_prix, etc.
+    col_prix <- paste0(tolower(type_carburant), "_prix")
+    
+    if (col_prix %in% names(station_row)) {
+      prix_val <- station_row[[col_prix]]
+      if (!is.null(prix_val) && !is.na(prix_val) && prix_val != "") {
+        return(as.numeric(prix_val))
+      }
+    }
+    
+    return(NA)
+  }
+  
+  # --- Distance Routière + Récupération Itinéraire (CORRIGÉE) ---
+  distance_voiture <- function(lon1, lat1, lon2, lat2, retour_geometrie = FALSE) {
+    tryCatch({
+      url <- sprintf("http://router.project-osrm.org/route/v1/driving/%f,%f;%f,%f?overview=full&geometries=geojson",
+                     lon1, lat1, lon2, lat2)
+      
+      resp <- GET(url, timeout(5)) 
+      if (status_code(resp) == 200) {
+        data <- fromJSON(content(resp, "text"), simplifyVector = FALSE)
+        
+        if (!is.null(data$routes) && length(data$routes) > 0) {
+          distance_km <- data$routes[[1]]$distance / 1000
+          
+          if (retour_geometrie) {
+            # Extraire les coordonnées de la géométrie
+            coords <- data$routes[[1]]$geometry$coordinates
+            return(list(
+              distance = distance_km,
+              geometry = coords
+            ))
+          } else {
+            return(distance_km)
+          }
+        }
+      }
+      return(if(retour_geometrie) list(distance = NA, geometry = NULL) else NA) 
+    }, error = function(e) {
+      print(paste("Erreur distance_voiture:", e$message))
+      return(if(retour_geometrie) list(distance = NA, geometry = NULL) else NA)
+    })
+  }
+  
+  # --- Calcul Coût ---
+  calculer_cout <- function(prix_L, dist_km, conso_100) {
+    trajet_AR_km <- dist_km * 2
+    litres_conso <- (trajet_AR_km * conso_100) / 100
+    cout_plein <- 50 * prix_L 
+    return(cout_plein + (litres_conso * prix_L))
+  }
+  
+  # --- LOGIQUE PRINCIPALE ---
+  observeEvent(input$chercher, {
+    req(input$adresse)
+    
+    withProgress(message = 'Recherche en cours...', value = 0, {
+      
+      # Géocodage
+      coords <- geocoder(input$adresse)
+      if (is.null(coords)) {
+        showNotification("Adresse introuvable.", type = "error")
+        return()
+      }
+      coords_depart(coords)
+      incProgress(0.2, detail = "Récupération des prix...")
+      
+      # API Data
+      raw_data <- get_stations_api(coords$lat, coords$lon, input$rayon)
+      
+      if (is.null(raw_data)) {
+        showNotification("Aucune station trouvée dans ce rayon.", type = "warning")
+        stations_data(NULL)
+        return()
+      }
+      
+      print(paste("Nombre de stations brutes:", nrow(raw_data)))
+      
+      # Traitement ligne par ligne
+      stations_list <- list()
+      
+      for (i in 1:nrow(raw_data)) {
+        station <- raw_data[i, ]
+        
+        # Extraction coordonnées
+        coords_station <- extraire_coords(station)
+        
+        if (i == 1) {
+          print(paste("Station 1 - Lat:", coords_station$lat, "Lon:", coords_station$lon))
+        }
+        
+        # Extraction prix
+        prix <- extraire_prix(station, input$carburant)
+        
+        if (i == 1) {
+          print(paste("Station 1 - Prix extrait:", prix))
+        }
+        
+        # Validation
+        if (!is.na(coords_station$lat) && !is.na(coords_station$lon) && !is.na(prix)) {
+          stations_list[[length(stations_list) + 1]] <- data.frame(
+            id = ifelse(!is.null(station$id) && !is.na(station$id), as.character(station$id), paste0("st_", i)),
+            adresse = ifelse(!is.null(station$adresse) && !is.na(station$adresse), as.character(station$adresse), "Adresse inconnue"),
+            ville = ifelse(!is.null(station$ville) && !is.na(station$ville), as.character(station$ville), "Ville inconnue"),
+            latitude = coords_station$lat,
+            longitude = coords_station$lon,
+            prix_actuel = prix,
+            stringsAsFactors = FALSE
+          )
+        }
+      }
+      
+      print(paste("Stations valides trouvées:", length(stations_list)))
+      
+      if (length(stations_list) == 0) {
+        showNotification(paste("Aucune station avec", input$carburant, "trouvée."), type = "warning")
+        return()
+      }
+      
+      df_clean <- bind_rows(stations_list)
+      
+      incProgress(0.4, detail = "Calcul des distances...")
+      
+      # Calcul distances
+      df_clean$dist_oiseau <- sqrt((df_clean$latitude - coords$lat)^2 + 
+                                     (df_clean$longitude - coords$lon)^2)
+      
+      df_top <- df_clean %>% arrange(dist_oiseau) %>% head(15)
+      df_top$dist_route <- NA
+      
+      for(i in 1:nrow(df_top)) {
+        d <- distance_voiture(coords$lon, coords$lat, df_top$longitude[i], df_top$latitude[i])
+        
+        if (is.na(d)) {
+          df_top$dist_route[i] <- (df_top$dist_oiseau[i] * 111) * 1.3 
+        } else {
+          df_top$dist_route[i] <- d
+        }
+        incProgress(0.4/15)
+        Sys.sleep(0.2)
+      }
+      
+      df_final <- df_top %>%
+        rowwise() %>%
+        mutate(cout_total = calculer_cout(prix_actuel, dist_route, input$conso)) %>%
+        ungroup() %>%
+        arrange(cout_total) %>%
+        head(10)
+      
+      stations_data(df_final)
+      station_selectionnee(df_final[1,])
+      
+      # Récupérer l'itinéraire complet pour la meilleure station
+      incProgress(0.05, detail = "Calcul itinéraire...")
+      best_station <- df_final[1,]
+      route_info <- distance_voiture(coords$lon, coords$lat, 
+                                     best_station$longitude, best_station$latitude, 
+                                     retour_geometrie = TRUE)
+      
+      if (!is.null(route_info$geometry)) {
+        itineraire_geometrie(route_info$geometry)
+      } else {
+        itineraire_geometrie(NULL)
+      }
+      
+      showNotification(paste(nrow(df_final), "stations trouvées !"), type = "message")
+    })
+  })
+  
+  # --- CARTE (CORRIGÉE POUR AFFICHER LES ROUTES) ---
+  output$carte <- renderLeaflet({
+    req(coords_depart(), stations_data())
+    pos <- coords_depart()
+    data <- stations_data()
+    
+    # Vérifier que data n'est pas vide
+    if(is.null(data) || nrow(data) == 0) {
+      return(leaflet() %>% addTiles() %>% 
+               setView(lng = pos$lon, lat = pos$lat, zoom = 12))
+    }
+    
+    best <- data[1,]
+    
+    carte <- leaflet() %>%
+      addTiles() %>%
+      addMarkers(lng = pos$lon, lat = pos$lat, popup = "🏠 Départ",
+                 icon = makeIcon("https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png", 25, 41)) %>%
+      addMarkers(data = data, lng = ~longitude, lat = ~latitude, layerId = ~id,
+                 popup = ~paste0("<b>", ville, "</b><br>", adresse, "<br>Prix: ", prix_actuel, " €/L<br>Coût total: ", round(cout_total, 2), " €"),
+                 icon = makeIcon("https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-green.png", 25, 41))
+    
+    # Ajouter l'itinéraire routier si disponible
+    geom <- itineraire_geometrie()
+    
+    if (!is.null(geom) && length(geom) > 0) {
+      tryCatch({
+        # Convertir la liste de coordonnées [lon, lat] en dataframe
+        route_df <- do.call(rbind, lapply(geom, function(coord) {
+          data.frame(lon = coord[[1]], lat = coord[[2]])
+        }))
+        
+        # Ajouter la polyligne avec les vraies coordonnées routières
+        carte <- carte %>%
+          addPolylines(lng = route_df$lon, lat = route_df$lat,
+                       color = "blue", weight = 4, opacity = 0.7,
+                       smoothFactor = 1)
+        
+        print(paste("Itinéraire tracé avec", nrow(route_df), "points"))
+        
+      }, error = function(e) {
+        print(paste("Erreur tracé itinéraire:", e$message))
+        # Fallback: ligne droite si erreur
+        carte <<- carte %>%
+          addPolylines(lng = c(pos$lon, best$longitude), 
+                       lat = c(pos$lat, best$latitude),
+                       color = "red", weight = 2, dashArray = "5,5", opacity = 0.5)
+      })
+    } else {
+      print("Pas de géométrie disponible, tracé ligne droite")
+      # Fallback: ligne droite si pas d'itinéraire
+      carte <- carte %>%
+        addPolylines(lng = c(pos$lon, best$longitude), 
+                     lat = c(pos$lat, best$latitude),
+                     color = "red", weight = 2, dashArray = "5,5", opacity = 0.5)
+    }
+    
+    carte
+  })
+  
+  # Clic sur une station : mettre à jour l'itinéraire
+  observeEvent(input$carte_marker_click, {
+    click <- input$carte_marker_click
+    data <- stations_data()
+    coords <- coords_depart()
+    
+    if(!is.null(data) && !is.null(coords)) {
+      stat <- data %>% filter(id == click$id)
+      if(nrow(stat) > 0) {
+        station_selectionnee(stat[1,])
+        
+        # Recalculer l'itinéraire pour cette station
+        route_info <- distance_voiture(coords$lon, coords$lat, 
+                                       stat$longitude[1], stat$latitude[1], 
+                                       retour_geometrie = TRUE)
+        
+        if (!is.null(route_info$geometry)) {
+          itineraire_geometrie(route_info$geometry)
+        }
+      }
+    }
+  })
+  
+  output$resultats <- renderTable({
+    req(stations_data())
+    stations_data() %>%
+      select("Ville" = ville, "Adresse" = adresse, "Prix (€/L)" = prix_actuel, 
+             "Dist (km)" = dist_route, "Total (€)" = cout_total)
+  }, digits = 2)
+  
+  output$station_info <- renderText({
+    req(station_selectionnee())
+    s <- station_selectionnee()
+    paste0(s$adresse, " - ", s$ville, "\n",
+           "Prix : ", s$prix_actuel, " €/L\n",
+           "Distance : ", round(s$dist_route, 1), " km\n",
+           "Coût Total : ", round(s$cout_total, 2), " €")
+  })
+  
+  observeEvent(input$gmaps, {
+    req(coords_depart(), station_selectionnee())
+    origin <- coords_depart()
+    dest <- station_selectionnee()
+    
+    url <- sprintf("https://www.google.com/maps/dir/?api=1&origin=%f,%f&destination=%f,%f&travelmode=driving",
+                   origin$lat, origin$lon, dest$latitude, dest$longitude)
+    
+    shinyjs::runjs(paste0("window.open('", url, "', '_blank');"))
+  })
+}
+
+shinyApp(ui = ui, server = server)
