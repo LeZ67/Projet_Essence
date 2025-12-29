@@ -1,0 +1,107 @@
+---
+title: "V2 pelletier"
+output: html_document
+date: "2025-12-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+#Etape 1: Importation des données du fichier en Open data
+
+```{r}
+# installer les packages si besoin
+install.packages(c("httr","readr","sf"))
+
+library(httr)
+library(readr)
+library(sf)
+library(xml2)
+
+# 1) télécharger le fichier (ici instantane ZIP)
+url <- "https://donnees.roulez-eco.fr/opendata/instantane"
+GET(url, write_disk("instantane.zip", overwrite=TRUE))
+
+# 2) dézipper
+unzip("instantane.zip", exdir = "data")
+list.files("data")
+xml_file <- "data/PrixCarburants_instantane.xml"
+doc <- read_xml(xml_file)
+doc
+
+```
+```{r}
+#On extrait toutes les stations de notre base 
+stations <- xml_find_all(doc, ".//pdv")
+length(stations)
+
+```
+```{r}
+#Il ne reste plus qu'à créer un tableau avec nos données 
+library(tibble)
+
+df <- tibble(
+  id = xml_attr(stations, "id"),
+  latitude = as.numeric(xml_attr(stations, "latitude")) / 100000,
+  longitude = as.numeric(xml_attr(stations, "longitude")) / 100000
+)
+head(df)
+colnames(df)
+view(df)#permet de trouver le tableau
+```
+
+`
+on verifie que nos données soient cohérentes avant de continuer
+```{r}
+summary(df$latitude)
+summary(df$longitude)
+
+```
+
+#Etape 2: Extraire notre position 
+On veut automatiser le code sans avoir besoin de lui donner notre longitude et latitude. On va passer par l'adresse IP de notre ordinateur
+```{r}
+
+library(jsonlite)
+geo <- fromJSON("https://ipapi.co/json/")
+geo
+
+```
+La commande précédente nous donne toutes les informations possibles d'une extraction d'adresse IP (Region,type de monnaie utilisée dans le pays, code postal, Capitale du Pays,...)
+
+On extraire ici uniquement la longitude et la latitude de l'adresse IP, nous n'avons pas besoin du reste. Les coordonnées seront différentes d'un individu à l'autre selon sa position. 
+```{r}
+ma_lat <- geo$latitude
+ma_lon <- geo$longitude
+
+ma_lat
+ma_lon
+```
+#Etape 3: Calculer la distance entre ma position et les stations
+Le but maintenant est de calculer la distance entre les stations et ma position. On prend la fonction du package ggplot2, distHaversine qui est une fonction particulière permettant de calculer une distance géographique entre deux points en prennant en compte la longitude et la latitude (ma position et celle d'une station essence)
+```{r}
+library(geosphere)
+
+coords_stations <- cbind(df$longitude, df$latitude)
+
+df$distance_m <- distHaversine(
+  coords_stations,
+  c(ma_lon, ma_lat)
+)
+
+df[, c("latitude", "longitude", "distance_m")]
+
+```
+
+
+On va maintenant à partir du tableau précédent trouver la station la plus proche en prenant donc le minimum de la distance m 
+```{r}
+nearest_station <- df[which.min(df$distance_m), ]
+cat("Station la plus proche :\n")
+print(nearest_station)
+```
+On retrouve donc la station la plus proche de mes coordonnées GPS
+
+
+#Etape 4: Ajout de la variable prix 
+
