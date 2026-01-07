@@ -63,6 +63,15 @@ top15<- top15 %>%
       #on tri par score et on prend des 10 meilleures stations 
       final <- top15 %>% arrange(score) %>% head(10)
 ```
+### Hypothèse de modélisation 
+Nous faisons les hypothèses suivantes: 
+- Le plein d'une voiture est fixée à **50L**
+- Nous prenons les distances **aller-retour** entre l'adresse de départ et la station
+- On suppose que la consommation du vehicule est **constante** tout au long du trajet
+- Seuil de fraîcheur des prix est fixé à **7 jours**, c'est à dire que nous ne prenons pas de prix qui ont été mis à jour il y a plus d'une semaine
+- Pondération de **k=0.5**
+- Le choix de la station repose sur le **score distance-prix**
+
 ## Lancement de l'outil
 Avant de lancer l'application, il est nécessaire d'effectuer cette manipulation dans votre console R :
 
