@@ -1,10 +1,19 @@
 # Application de echerche de station essence : Optimisation du plein de carburant
 
 ## Problématique
-Comment rentabiliser son plein d'essence selon la distance et les prix à la pompe ? 
+Nous nous sommes poser une question : **est-ce possible de trouver la station essence idéale?**, celle qui serait la plus intéressante en termes de distance et de prix. 
 
-Nous avons voulu à travers notre projet créé une application qui permet automatiquement de calculer le coût **réel** d'un plein de carburant en tenant compte de la consommation du véhicule et du trajet. Il suffit simplement de remplir quelques informations sur notre véhicule et notre position pour connaitre quelles sont les stations essences alentours et où aller pour optimiser notre plein d'essence.
+Nous avons donc décider de créer une application Shiny où il suffit d'entrer une adresse donnée pour trouver la station essence qui est un compromis entre la moins loin et la moins chère. On s'est basé sur le prix du carburant, la distance réelle, la consommation du véhicule et l'ancienneté du prix (la dernière mise à jour du prix). 
 
+## Principales fonctionnalités du code 
+- Conversion d'une adresse texte en coordonnées GPS
+- Récupération des stations services dans un rayon donné autour d'un point GPS
+- Calcul d'une distance routière réelle entre une position et une station
+- Calcul du coût total et d'un score distance-prix
+- Affichage sur une carte de manière interactive grâce à Leaflet
+- Création d'un tableau comparatif des meilleures stations 
+- Ouverture de Google Maps avec l'itinéraire pour aller à la station
+  
 ## Traitement des données
 Ce projet utilise et transforme trois flux de données : le **Géocodage**, le but est de transformer une adresse textuelle en coordonnées GPS pour que notre application sache où nous sommes positionnés par rapport aux stations alentours ; le **Prix des carburants**, on récupère en temps réel des données gouvernementales (open data) concernant le prix des différents carburants et le **Calcul d'itinéraire** : On récupère des distances routières réelles via le moteur OSRM.
 
