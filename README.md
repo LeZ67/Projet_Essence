@@ -36,7 +36,8 @@ Grâce à l'API Nominatim, on convertit une adresse donnée en coordonnées GPS
 
 **2. Parsing des fichiers JSON :** 
 
-Notre application va récupérer les données brutes en JSON via une API (gouvernementale), puis fait un parsing (analyse et conversion du texte) pour les transformer en DataFrame pour pouvoir calculer le coût total d'un plein par la suite. Pour ce faire, nous utilisons la fonction ```fromJSON()```, du package ```jsonlite```.
+Notre application va récupérer les données brutes en JSON via une APIs
+On effectue le parsing (analyse et conversion du texte) pour les transformer en DataFrame exploitable sur R et pour pouvoir calculer le coût total d'un plein par la suite. Pour ce faire, nous utilisons la fonction ```fromJSON()```, du package ```jsonlite```.
 
 **3. Nettoyage des données (filtrage des prix nuls ou aberrants) :** 
 
