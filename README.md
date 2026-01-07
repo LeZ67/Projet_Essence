@@ -40,7 +40,7 @@ La première étape est de convertir les données pour obtenir un format standar
 
 **3. Enrichissement des données :** 
 
-Ici, nous enrichissons les données par le calcul du coût total, que nous réalisons avec trois indicateurs, le prix du carburant, la distance aller-retour et la consommation du véhicule. Donc au lieu d'afficher simplment le coût du carburant, l'utilisateur connaitra le ```cout_total```, ce qui permet de présenter les stations par rentabilité réelle. On le calcul simplement grâce à cette formulation :
+Ici, nous enrichissons les données par le calcul du coût total, que nous réalisons avec trois indicateurs, le prix du carburant, la distance aller-retour et la consommation du véhicule. Donc au lieu d'afficher simplement le coût du carburant, l'utilisateur connaitra le ```cout_total```.
 
 ```{r}
 calculer_cout <- function(prix_L, dist_km, conso_100) {
@@ -50,7 +50,16 @@ calculer_cout <- function(prix_L, dist_km, conso_100) {
   return(cout_plein + (litres_conso * prix_L))
 }
 ```
+On crée par la suite un score distance-prix permettant de trouver la meilleure station en faisant un compromis entre la distance et le prix. On pondère la distance à k=0.5. C'est à dire qu'on favorise le prix à la distance ( si k=1 on aurait été indifférent entre le prix et la distance)
+```{r}
+top15<- top15 %>%
+        mutate(cout = calculer_cout(prix, dist, input$conso))
 
+      k<- 0.5 
+      top15 <- top15 %>% mutate(score = cout + k * dist)      
+      #on tri par score et on prend des 10 meilleures stations 
+      final <- top15 %>% arrange(score) %>% head(10)
+```
 ## Lancement de l'outil
 Avant de lancer l'application, il est nécéssaire d'effectuer cette manipulation dans votre console R :
 ```{r}
