@@ -1,9 +1,9 @@
 # Application de recherche de station essence : Optimisation du plein de carburant
 
 ## Problématique
-Nous nous sommes poser une question : **est-ce possible de trouver la station essence idéale?**, celle qui serait la plus intéressante en termes de distance et de prix. 
+Nous nous sommes posé une question : **est-ce possible de trouver la station essence idéale?**, celle qui serait la plus intéressante en termes de distance et de prix. 
 
-Nous avons donc décider de créer une application Shiny où il suffit d'entrer une adresse donnée pour trouver la station essence qui est un compromis entre la moins loin et la moins chère. On s'est basé sur le prix du carburant, la distance réelle, la consommation du véhicule et l'ancienneté du prix (la dernière mise à jour du prix). 
+Nous avons donc décidé de créer une application Shiny où il suffit d'entrer une adresse donnée pour trouver la station essence qui est un compromis entre la moins loin et la moins chère. On s'est basé sur le prix du carburant, la distance réelle, la consommation du véhicule et l'ancienneté du prix (la dernière mise à jour du prix). 
 
 ## Principales fonctionnalités du code 
 - Conversion d'une adresse texte en coordonnées GPS
@@ -15,9 +15,9 @@ Nous avons donc décider de créer une application Shiny où il suffit d'entrer 
 - Ouverture de Google Maps avec l'itinéraire pour aller à la station
   
 ## Traitement des données
-Ce projet trois sources de données :
+Ce projet utilise trois sources de données :
 - **Nominatim (OpenStreetMap)** permet le **Géocodage**, c'est à dire transformer une adresse textuelle en coordonnées GPS pour que notre application sache où nous sommes positionnés.
-- **API Prix des carburants – data.economie.gouv.fr** permet de récuper en temps réel des données gouvernementales (open data) concernant le prix des différents carburants 
+- **API Prix des carburants – data.economie.gouv.fr** permet de récuperer en temps réel des données gouvernementales (open data) concernant le prix des différents carburants 
 - **OSRM (Open Source Routing Machine)** permet le **Calcul d'itinéraire** et des **distances routières réelles**
 
 Liste des packages utilisés : 
@@ -26,7 +26,7 @@ Liste des packages utilisés :
 - ```httr```: permet de communiquer avec les APIs
 - ```jsonlite```: traduit le format texte JSON en objet R pour qu'il devienne exploitable
 - ```dplyr```: facilite compréhension et nettoyage des données
-- ```leaflet```: pour l'affichage de la carte itéractive
+- ```leaflet```: pour l'affichage de la carte intéractive
 - ```geosphere```: pour calculer les distances entre deux points GPS 
 
 ### Étapes de traitement :
@@ -36,13 +36,14 @@ Notre application va récupérer les données brutes en JSON via une API (gouver
 
 **2. Nettoyage des données (filtrage des prix nuls ou aberrants) :** 
 
-La première étape est de convertir les données pour obtenir un format standard ```WGS84``` pour que la carte ```Leaflet``` les comprennent. Puis il faut filtrer les valeurs manquantes, donc trouver les stations n'ayant pas renseignées leur prix / adresse. Et enfin, il faut séléctionner les données utiles, autrement dit si l'utilisateur cherche un certains type de carburant, le code nettoie la base de données pour ne donner que des informations qui intérèsse l'utilisateur.
+La première étape est de convertir les données pour obtenir un format standard ```WGS84``` pour que la carte ```Leaflet``` les comprennent. Puis il faut filtrer les valeurs manquantes, donc trouver les stations n'ayant pas renseignées leur prix / adresse. Et enfin, il faut sélectionner les données utiles, autrement dit si l'utilisateur cherche un certains type de carburant, le code nettoie la base de données pour ne donner que des informations qui intéresse l'utilisateur.
 
 **3. Enrichissement des données :** 
 
 Ici, nous enrichissons les données par le calcul du coût total, que nous réalisons avec trois indicateurs, le prix du carburant, la distance aller-retour et la consommation du véhicule. Donc au lieu d'afficher simplement le coût du carburant, l'utilisateur connaitra le ```cout_total```.
 
-```{r}
+```markdown
+```r
 calculer_cout <- function(prix_L, dist_km, conso_100) {
   trajet_AR_km <- dist_km * 2
   litres_conso <- (trajet_AR_km * conso_100) / 100
@@ -51,7 +52,9 @@ calculer_cout <- function(prix_L, dist_km, conso_100) {
 }
 ```
 On crée par la suite un score distance-prix permettant de trouver la meilleure station en faisant un compromis entre la distance et le prix. On pondère la distance à k=0.5. C'est à dire qu'on favorise le prix à la distance ( si k=1 on aurait été indifférent entre le prix et la distance)
-```{r}
+
+```markdown
+```r
 top15<- top15 %>%
         mutate(cout = calculer_cout(prix, dist, input$conso))
 
@@ -61,8 +64,10 @@ top15<- top15 %>%
       final <- top15 %>% arrange(score) %>% head(10)
 ```
 ## Lancement de l'outil
-Avant de lancer l'application, il est nécéssaire d'effectuer cette manipulation dans votre console R :
-```{r}
+Avant de lancer l'application, il est nécessaire d'effectuer cette manipulation dans votre console R :
+
+```markdown
+```r
 install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet"))
 1. Assurez-vous d'avoir installé les bibliothèques : `shiny`, `leaflet`, `httr`, `jsonlite`, `dplyr`.
 2. Lancez l'application dans R :
@@ -71,4 +76,4 @@ install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet"))
 ```
 
 ## Conclusion :
-Notre application permet bien de trouver quelle est la station à choisir pour optimiser son plein d'essence (surtout son prix), tout en renseignant le moins d'informations possible. Ce que nous trouvons intéréssant est d'ajouter cette carte, permettant aux utilisateurs de mieux se situer dans l'espace ainsi que de pouvoir visualiser le trajet dans google maps, pour les mener directement à cette station sans perdre de temps.
+Notre application permet bien de trouver quelle est la station à choisir pour optimiser son plein d'essence (surtout son prix), tout en renseignant le moins d'informations possible. Ce que nous trouvons intéressant est d'ajouter cette carte, permettant aux utilisateurs de mieux se situer dans l'espace ainsi que de pouvoir visualiser le trajet dans google maps, pour les mener directement à cette station sans perdre de temps.
