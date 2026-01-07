@@ -15,7 +15,10 @@ Nous avons donc décider de créer une application Shiny où il suffit d'entrer 
 - Ouverture de Google Maps avec l'itinéraire pour aller à la station
   
 ## Traitement des données
-Ce projet utilise et transforme trois flux de données : le **Géocodage**, le but est de transformer une adresse textuelle en coordonnées GPS pour que notre application sache où nous sommes positionnés par rapport aux stations alentours ; le **Prix des carburants**, on récupère en temps réel des données gouvernementales (open data) concernant le prix des différents carburants et le **Calcul d'itinéraire** : On récupère des distances routières réelles via le moteur OSRM.
+Ce projet trois sources de données :
+- **Nominatim (OpenStreetMap)** permet le **Géocodage**, c'est à dire transformer une adresse textuelle en coordonnées GPS pour que notre application sache où nous sommes positionnés.
+- **API Prix des carburants – data.economie.gouv.fr** permet de récuper en temps réel des données gouvernementales (open data) concernant le prix des différents carburants 
+- **OSRM (Open Source Routing Machine)** permet le **Calcul d'itinéraire** et des **distances routières réelles**
 
 ### Étapes de traitement :
 **1. Parsing des fichiers JSON :** 
