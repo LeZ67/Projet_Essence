@@ -1,4 +1,4 @@
-# Application de echerche de station essence : Optimisation du plein de carburant
+# Application de recherche de station essence : Optimisation du plein de carburant
 
 ## Problématique
 Nous nous sommes poser une question : **est-ce possible de trouver la station essence idéale?**, celle qui serait la plus intéressante en termes de distance et de prix. 
@@ -19,6 +19,15 @@ Ce projet trois sources de données :
 - **Nominatim (OpenStreetMap)** permet le **Géocodage**, c'est à dire transformer une adresse textuelle en coordonnées GPS pour que notre application sache où nous sommes positionnés.
 - **API Prix des carburants – data.economie.gouv.fr** permet de récuper en temps réel des données gouvernementales (open data) concernant le prix des différents carburants 
 - **OSRM (Open Source Routing Machine)** permet le **Calcul d'itinéraire** et des **distances routières réelles**
+
+Liste des packages utilisés : 
+- ```shiny```: pour créer l'application
+- ```shinyjs```: ajout des comportements JavaScript, est un complément à shiny permet des fonctionnalités différentes comme l'ouverture de l'onglet GoogleMaps
+- ```httr```: permet de communiquer avec les APIs
+- ```jsonlite```: traduit le format texte JSON en objet R pour qu'il devienne exploitable
+- ```dplyr```: facilite compréhension et nettoyage des données
+- ```leaflet```: pour l'affichage de la carte itéractive
+- ```geosphere```: pour calculer les distances entre deux points GPS 
 
 ### Étapes de traitement :
 **1. Parsing des fichiers JSON :** 
