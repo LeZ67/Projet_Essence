@@ -30,15 +30,22 @@ Liste des packages utilisés :
 - ```geosphere```: pour calculer les distances entre deux points GPS 
 
 ### Étapes de traitement :
-**1. Parsing des fichiers JSON :** 
+**1. Géocodage de l'adresse utilisateur**
+Grâce à l'API Nominatim, on convertit une adresse donnée en coordonnées GPS 
 
-Notre application va récupérer les données brutes en JSON via une API (gouvernementale), puis fait un parsing (analyse et conversion du texte) pour les transformer en DataFrame pour pouvoir calculer le coût total d'un plein. Pour le faire, nous utilisons la fonction ```fromJSON()```, du package ```jsonlite```.
+**2. Parsing des fichiers JSON :** 
+
+Notre application va récupérer les données brutes en JSON via une API (gouvernementale), puis fait un parsing (analyse et conversion du texte) pour les transformer en DataFrame pour pouvoir calculer le coût total d'un plein par la suite. Pour ce faire, nous utilisons la fonction ```fromJSON()```, du package ```jsonlite```.
 
 **2. Nettoyage des données (filtrage des prix nuls ou aberrants) :** 
 
 La première étape est de convertir les données pour obtenir un format standard ```WGS84``` pour que la carte ```Leaflet``` les comprennent. Puis il faut filtrer les valeurs manquantes, donc trouver les stations n'ayant pas renseignées leur prix / adresse. Et enfin, il faut sélectionner les données utiles, autrement dit si l'utilisateur cherche un certains type de carburant, le code nettoie la base de données pour ne donner que des informations qui intéresse l'utilisateur.
+On concerne uniquement les coordonnées valides, les prix datant de moins d'une semaine et ayant un prix renseigné
 
-**3. Enrichissement des données :** 
+**3.Calcul des distances à vol d'oiseau et routières réelles**
+Grâce à l'API OSRM, on peut calculer les distances routières réelles 
+
+**4. Enrichissement des données :** 
 
 Ici, nous enrichissons les données par le calcul du coût total, que nous réalisons avec trois indicateurs, le prix du carburant, la distance aller-retour et la consommation du véhicule. Donc au lieu d'afficher simplement le coût du carburant, l'utilisateur connaitra le ```cout_total```.
 
@@ -63,6 +70,9 @@ top15<- top15 %>%
       #on tri par score et on prend des 10 meilleures stations 
       final <- top15 %>% arrange(score) %>% head(10)
 ```
+**5. Affichage**
+On crée enfin un carte intéractive, un tableau avec les meilleures stations disponibles sur l'application et un fenêtre Google Maps pour visualiser le trajet de ma position à la station choisie comme étant la meilleure
+
 ### Hypothèse de modélisation 
 Nous faisons les hypothèses suivantes: 
 - Le plein d'une voiture est fixée à **50L**
