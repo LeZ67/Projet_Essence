@@ -1,0 +1,171 @@
+---
+title: "La station essence idéale"
+author: "HELLSTERN Alexane ; KLEINPETER Zoé ; SEITHER Gauthier"
+output: beamer_presentation
+date: "2026-01-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## 1. Le projet 
+
+- Application où il suffit d'entrer une adresse donnée pour trouver la station essence idéale
+- Définition station idéale : un compromis entre la moins loin et la moins chère 
+- On a utilisé : Prix du carburant, Distance réelle, Consommation du véhicule et Ancienneté du prix 
+
+## Source de données
+
+- **Nominatim (OpenStreetMap)** = sert au géocodage = Transforme adresse (texte) en coordonnées GPS
+- **API Flux instantané-data.gouv.fr** = Site du gouvernement pour récupérer les stations et les prix dans toute la France
+- **OSRM (Open Source Routing Machine)** = pour calculer les distances réelles = moteur de calcul d'itinéraire routier 
+
+## 2. Logique du code 
+
+- Choix des packages
+- Création de l'Interface utilisateur
+- Création du serveur (création des variables réactives **ma_position**; **mes_stations**; **station_choisie**; **trajet** et Création de 8 fonctions) 
+- Utilisation de Shiny = pour tout relier
+
+## 3. Idée Générale
+NB : On a d'abord créer 8 fonctions dont on s'est servi pour notre application
+
+1. Trouver mes **coordonnées** à partir de mon adresse (**trouver_coords**)
+
+2. Chercher les **stations autour de moi** (**chercher_stations**) 
+
+3. Nettoyer des données et prendre les stations valides (**get_coords**; **get_prix**; **get_heures_maj**)
+
+4. Création d'un **data frame** (Toutes les informations d'une station en 1 ligne du tableau)
+
+5. Calculer les **distances** entre ma position et les stations (**calculer_distance_vo** et **calculer_distance**)
+
+6. Calculer le **coût total** (déplacement + plein) (**calculer_cout**)
+
+7. Création du **score distance-prix**
+
+8. Tri et selection de **la meilleure station** (**calculer_distance**)
+
+9. Calcul de **itinéaire** pour la station choisie
+
+
+## 4. Les fonctions créées avec une API externe
+- La fonction **trouver_coords**; même construction avec **chercher_stations** (site data gouv) et **calculer_distance**(osrm)
+- Enjeux du format des données d'API
+```{r, echo=TRUE, eval=FALSE, size="footnotesize"}
+  trouver_coords <- function(adresse) {
+    url <- "https://nominatim.openstreetmap.org/search"
+    reponse <- GET(url, query = list
+                   (q = adresse,
+                    format = "json",
+                    limit = 1),
+                   user_agent("StationApp"))
+      data <- fromJSON(content(reponse, "text"))
+      if (length(data) > 0) { 
+        return(list(
+          lat = as.numeric(data$lat[1]), 
+          lon = as.numeric(data$lon[1])
+          ))
+      }return(NULL) 
+  }
+```
+
+## 5. Création d'un data frame
+- **Défi**: Nettoyage des données préalables = garde uniquement les données complètes, valides (prix>0) et de moins de 7 jours (pour éviter des prix anciens)
+- Création d'un data frame avec une ligne par station contenant toutes les informations de celle-ci
+```{r, echo=TRUE, eval=FALSE, size="footnotesize"}
+if (cond_coords && cond_prix && cond_fraicheur) {
+      data.frame(
+        id = id_val,
+        adresse =adresse_val,
+        ville = ville_val,
+        lat = coords_st$lat,
+        lon = coords_st$lon,
+        prix = prix_st,
+        maj_h=ifelse(is.na(heures_maj), 
+                     NA, round(heures_maj)),
+        stringsAsFactors=FALSE
+      )} else {NULL}
+  }) 
+```
+
+## 6. Calcul des distances
+- Distance à vol d'oiseau (premier tri)
+- **Défi** : Distance routière réelle (on envoie une requête vers OSRM = lourd)
+```{r, echo=TRUE, eval=FALSE, size="footnotesize"}
+   
+df$distance_vo <- calculer_distance_vo(
+  df$lon, df$lat,
+  coords$lon, coords$lat
+    )
+top15 <- df %>%
+  arrange(distance_vo) %>%
+  head(15)
+      
+top15$dist  <- sapply(1:nrow(top15), function(i) {
+  d <- calculer_distance(coords$lon, coords$lat,
+                         top15$lon[i], top15$lat[i])
+    if (is.na(d))10 else d 
+    })
+```
+
+## 7. Calcul des coûts
+- Création d'une fonction **calculer_cout** permet de calculer le coût total (déplacement+plein) au préalable 
+- Choix arbitraires justifiables
+```{r, echo=TRUE, eval=FALSE, size="footnotesize"}
+  calculer_cout <- function(prix, distance, conso) {
+    aller_retour <- distance * 2 
+    litres <- (aller_retour * conso) / 100 
+    plein <- 50 * prix 
+    cout <- plein + litres * prix 
+    return(cout)
+  }
+```
+
+## 8. Création du score distance-coût
+```{r, echo=TRUE, eval=FALSE, size="footnotesize"}
+# Calculer coût total
+  top15<- top15 %>%
+    mutate(cout = calculer_cout(prix, dist, input$conso)) 
+      
+#Création du score
+  k<- 0.5 #favoriser le prix à la distance
+  top15 <- top15 %>% mutate(score = cout + k * dist)
+    
+#On tri par score et on prend des 10 meilleures stations 
+      final <- top15 %>% arrange(score) %>% head(10)
+```
+
+## 9. Mise en forme et intéraction utilisateur
+- Tri et sélection de la meilleure station
+- On stocke le trajet 
+- Création de la carte, du clic station, du tableau, des infos stations et l'ouverture Google Maps
+
+## 10. Limites/Points de Vigilance
+- Dépendance aux APIs externes (osrm peut être lent)
+- Choix de certaines valeurs arbitraires (Plein=50L ; k=0,5 ; 15 stations retenues)
+- Gestion des erreurs
+- On pourrait sans doute raccourcir, certaines longues écritures (lapply)
+- Hétérogénéité des données (longitude, latitude) = création de **get_coords_stations**
+
+## 11. Les forces
+- Pluralité de fonctions 
+- Utilisation de données réelles fiables
+- Ajout de commandes pour la gestion des bugs
+- Optimisation du temps de calcul = **calculer_distance_vo** est un premier filtre puis **calcul_distance** (plus lourd) utilisée que sur les stations pertinentes
+- Création du Score distance-coût 
+- Visualisation claire avec Shiny
+
+## Conclusion
+Notre projet combine données ouvertes, géolocalisation et calculs pour répondre à un besoin concret 
+
+On vous montre comment ça marche ? 
+```{r, echo=TRUE, eval=FALSE, size="footnotesize"}
+shinyApp(ui, server)
+```
+
+
+
+
+
