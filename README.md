@@ -41,16 +41,26 @@ install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet"))
    ```R
    shiny::runApp()
 ```
-## Comment utiliser notre application ##
+## Comment utiliser notre application 
 1. Indiquer votre adresse de départ
 2. Indiquer le type de carburant souhaité
-3. Indiquer le rayon de recherche d'un station en km
+3. Indiquer le rayon de recherche d'une station en km
 4. Indiquer la consommation de votre véhicule au L/100km
 5. Appuyer sur "Rechercher"
 6. Vous pouvez Appuyer sur "Carte" ou "Résultats" pour avoir le détail des stations sélectionnées
 7. Appuyer sur "Ouvrir Google Maps" pour avoir l'itinéraire vers la meilleure station
   
-### Hypothèse de modélisation 
+## A savoir pour mieux comprendre le code 
+### Définitions des fonctions créées
+- ```trouver_coords``` = convertir mon adresse en coordonnées GPS
+- ```chercher_station``` = récupérer les stations dans un rayon autour d'un point GPS
+- ```get_coords_station``` = extraire les données GPS d'une station
+- ```get_prix``` = extraire le prix du carburant sélectionné pour une station donnée
+- ```get_heures_maj``` = calculer de l'ancienneté (h) de la dernière mise à jour du prix du carburant
+- ```calculer_distance_vo``` = calculer la distance à vol d'oiseau entre 2 points GPS (ma position et les stations) pour un filtrage rapide
+- ```calculer_distance``` = calculer la distance routière réelle sur les stations pertinente
+- ```calculer_cout``` = calculer coût total (déplacement A/R et plein)
+### Hypothèses de modélisation
 Nous faisons les hypothèses suivantes: 
 - Le plein d'une voiture est fixée à **50L**
 - Nous prenons les distances **aller-retour** entre l'adresse de départ et la station
@@ -58,7 +68,7 @@ Nous faisons les hypothèses suivantes:
 - Seuil de fraîcheur des prix est fixé à **7 jours**, c'est à dire que nous ne prenons pas de prix qui ont été mis à jour il y a plus d'une semaine
 - Pondération de **k=0.5**
 - Le choix de la station repose sur le **score distance-prix**
-  ```markdown
+```markdown
 ```r
 top15<- top15 %>%
         mutate(cout = calculer_cout(prix, dist, input$conso))
