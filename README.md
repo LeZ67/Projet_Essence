@@ -18,7 +18,7 @@ Cette application s'adresse à toute personne souhaitant trouver la station idé
 ## Données  et packages utilisés
 Ce projet utilise trois sources de données :
 - **Nominatim (OpenStreetMap)** permet le **Géocodage**, c'est à dire transformer une adresse textuelle en coordonnées GPS pour que notre application sache où nous sommes positionnés.
-- **API Prix des carburants – data.economie.gouv.fr** permet de récuperer en temps réel des données gouvernementales (open data) concernant le prix des différents carburants 
+- **API Prix des carburants-data.economie.gouv.fr** permet de récuperer en temps réel des données gouvernementales (open data) concernant le prix des différents carburants 
 - **OSRM (Open Source Routing Machine)** permet le **Calcul d'itinéraire** et des **distances routières réelles**
 
 Liste des packages utilisés : 
