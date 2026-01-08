@@ -29,7 +29,7 @@ Liste des packages utilisés :
 - ```dplyr```: facilite compréhension et nettoyage des données
 - ```leaflet```: pour l'affichage de la carte intéractive
 - ```geosphere```: pour calculer les distances entre deux points GPS
-- 
+  
 ## Lancement de l'outil
 Avant de lancer l'application, il est nécessaire d'effectuer cette manipulation dans votre console R :
 ```r
@@ -58,6 +58,7 @@ install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet"))
 - ```calculer_distance_vo``` = calculer la distance à vol d'oiseau entre 2 points GPS (ma position et les stations) pour un filtrage rapide
 - ```calculer_distance``` = calculer la distance routière réelle sur les stations pertinente
 - ```calculer_cout``` = calculer coût total (déplacement A/R et plein)
+
 ### Hypothèses de modélisation
 Nous faisons les hypothèses suivantes: 
 - Le plein d'une voiture est fixée à **50L**
