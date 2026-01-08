@@ -56,7 +56,7 @@ install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet"))
 - ```get_prix``` = extraire le prix du carburant sélectionné pour une station donnée
 - ```get_heures_maj``` = calculer de l'ancienneté (h) de la dernière mise à jour du prix du carburant
 - ```calculer_distance_vo``` = calculer la distance à vol d'oiseau entre 2 points GPS (ma position et les stations) pour un filtrage rapide
-- ```calculer_distance``` = calculer la distance routière réelle sur les stations pertinente
+- ```calculer_distance``` = calculer la distance routière réelle sur les stations pertinentes
 - ```calculer_cout``` = calculer coût total (déplacement A/R et plein)
 
 ### Hypothèses de modélisation
