@@ -4,6 +4,7 @@
 Nous nous sommes posé une question : **est-ce possible de trouver la station essence idéale?**, celle qui serait la plus intéressante en termes de distance et de prix. 
 
 Nous avons donc décidé de créer une application Shiny où il suffit d'entrer une adresse donnée pour trouver la station essence qui est un compromis entre la moins loin et la moins chère. On s'est basé sur le prix du carburant, la distance réelle, la consommation du véhicule et l'ancienneté du prix (la dernière mise à jour du prix). 
+Cette application s'adresse à toute personne souhaitant trouver la station idéale en termes de distance et de prix. 
 
 ## Principales fonctionnalités du code 
 - Conversion d'une adresse texte en coordonnées GPS
@@ -13,8 +14,8 @@ Nous avons donc décidé de créer une application Shiny où il suffit d'entrer 
 - Affichage sur une carte de manière interactive grâce à Leaflet
 - Création d'un tableau comparatif des meilleures stations 
 - Ouverture de Google Maps avec l'itinéraire pour aller à la station
-  
-## Traitement des données
+
+## Données  et packages utilisés
 Ce projet utilise trois sources de données :
 - **Nominatim (OpenStreetMap)** permet le **Géocodage**, c'est à dire transformer une adresse textuelle en coordonnées GPS pour que notre application sache où nous sommes positionnés.
 - **API Prix des carburants – data.economie.gouv.fr** permet de récuperer en temps réel des données gouvernementales (open data) concernant le prix des différents carburants 
@@ -27,65 +28,8 @@ Liste des packages utilisés :
 - ```jsonlite```: traduit le format texte JSON en objet R pour qu'il devienne exploitable
 - ```dplyr```: facilite compréhension et nettoyage des données
 - ```leaflet```: pour l'affichage de la carte intéractive
-- ```geosphere```: pour calculer les distances entre deux points GPS 
-
-### Étapes de traitement :
-**1. Géocodage de l'adresse utilisateur**
-
-Grâce à l'API Nominatim, on convertit une adresse donnée en coordonnées GPS 
-
-**2. Parsing des fichiers JSON :** 
-
-Notre application va récupérer les données brutes en JSON via une APIs
-On effectue le parsing (analyse et conversion du texte) pour les transformer en DataFrame exploitable sur R et pour pouvoir calculer le coût total d'un plein par la suite. Pour ce faire, nous utilisons la fonction ```fromJSON()```, du package ```jsonlite```.
-
-**3. Nettoyage des données (filtrage des prix nuls ou aberrants) :** 
-
-La première étape est de convertir les données pour obtenir un format standard ```WGS84``` pour que la carte ```Leaflet``` les comprennent. Puis il faut filtrer les valeurs manquantes, donc trouver les stations n'ayant pas renseignées leur prix / adresse. Et enfin, il faut sélectionner les données utiles, autrement dit si l'utilisateur cherche un certains type de carburant, le code nettoie la base de données pour ne donner que des informations qui intéresse l'utilisateur.
-On concerne uniquement les coordonnées valides, les prix datant de moins d'une semaine et ayant un prix renseigné
-
-**4.Calcul des distances à vol d'oiseau et routières réelles**
-
-Grâce à l'API OSRM, on peut calculer les distances routières réelles 
-
-**5. Enrichissement des données :** 
-
-Ici, nous enrichissons les données par le calcul du coût total, que nous réalisons avec trois indicateurs, le prix du carburant, la distance aller-retour et la consommation du véhicule. Donc au lieu d'afficher simplement le coût du carburant, l'utilisateur connaitra le ```cout_total```.
-
-```markdown
-```r
-calculer_cout <- function(prix_L, dist_km, conso_100) {
-  trajet_AR_km <- dist_km * 2
-  litres_conso <- (trajet_AR_km * conso_100) / 100
-  cout_plein <- 50 * prix_L 
-  return(cout_plein + (litres_conso * prix_L))
-}
-```
-On crée par la suite un score distance-prix permettant de trouver la meilleure station en faisant un compromis entre la distance et le prix. On pondère la distance à k=0.5. C'est à dire qu'on favorise le prix à la distance ( si k=1 on aurait été indifférent entre le prix et la distance)
-
-```markdown
-```r
-top15<- top15 %>%
-        mutate(cout = calculer_cout(prix, dist, input$conso))
-
-      k<- 0.5 
-      top15 <- top15 %>% mutate(score = cout + k * dist)      
-      #on tri par score et on prend des 10 meilleures stations 
-      final <- top15 %>% arrange(score) %>% head(10)
-```
-**6. Affichage**
-
-On crée enfin un carte intéractive, un tableau avec les meilleures stations disponibles sur l'application et un fenêtre Google Maps pour visualiser le trajet de ma position à la station choisie comme étant la meilleure
-
-### Hypothèse de modélisation 
-Nous faisons les hypothèses suivantes: 
-- Le plein d'une voiture est fixée à **50L**
-- Nous prenons les distances **aller-retour** entre l'adresse de départ et la station
-- On suppose que la consommation du vehicule est **constante** tout au long du trajet
-- Seuil de fraîcheur des prix est fixé à **7 jours**, c'est à dire que nous ne prenons pas de prix qui ont été mis à jour il y a plus d'une semaine
-- Pondération de **k=0.5**
-- Le choix de la station repose sur le **score distance-prix**
-
+- ```geosphere```: pour calculer les distances entre deux points GPS
+- 
 ## Lancement de l'outil
 Avant de lancer l'application, il est nécessaire d'effectuer cette manipulation dans votre console R :
 
@@ -97,6 +41,32 @@ install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet"))
    ```R
    shiny::runApp()
 ```
+## Comment utiliser notre application ##
+1. Indiquer votre adresse de départ
+2. Indiquer le type de carburant souhaité
+3. Indiquer le rayon de recherche d'un station en km
+4. Indiquer la consommation de votre véhicule au L/100km
+5. Appuyer sur "Rechercher"
+6. Vous pouvez Appuyer sur "Carte" ou "Résultats" pour avoir le détail des stations sélectionnées
+7. Appuyer sur "Ouvrir Google Maps" pour avoir l'itinéraire vers la meilleure station
+  
+### Hypothèse de modélisation 
+Nous faisons les hypothèses suivantes: 
+- Le plein d'une voiture est fixée à **50L**
+- Nous prenons les distances **aller-retour** entre l'adresse de départ et la station
+- On suppose que la consommation du vehicule est **constante** tout au long du trajet
+- Seuil de fraîcheur des prix est fixé à **7 jours**, c'est à dire que nous ne prenons pas de prix qui ont été mis à jour il y a plus d'une semaine
+- Pondération de **k=0.5**
+- Le choix de la station repose sur le **score distance-prix**
+  ```markdown
+```r
+top15<- top15 %>%
+        mutate(cout = calculer_cout(prix, dist, input$conso))
+      k<- 0.5 
+      top15 <- top15 %>% mutate(score = cout + k * dist)      
+      #on tri par score et on prend des 10 meilleures stations 
+      final <- top15 %>% arrange(score) %>% head(10)
+```
 
 ## Conclusion :
-Notre application permet bien de trouver quelle est la station à choisir pour optimiser son plein d'essence (surtout son prix), tout en renseignant le moins d'informations possible. Ce que nous trouvons intéressant est d'ajouter cette carte, permettant aux utilisateurs de mieux se situer dans l'espace ainsi que de pouvoir visualiser le trajet dans google maps, pour les mener directement à cette station sans perdre de temps.
+Notre application permet bien de trouver quelle est la station à choisir pour optimiser son plein d'essence (son prix et sa distance parcourue), tout en renseignant le moins d'informations possible. Ce que nous trouvons intéressant est d'ajouter une carte, permettant aux utilisateurs de mieux se situer dans l'espace ainsi que de pouvoir visualiser le trajet dans google maps, pour les mener directement à cette station.
