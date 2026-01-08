@@ -32,8 +32,6 @@ Liste des packages utilisés :
 - 
 ## Lancement de l'outil
 Avant de lancer l'application, il est nécessaire d'effectuer cette manipulation dans votre console R :
-
-```markdown
 ```r
 install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet"))
 1. Assurez-vous d'avoir installé les bibliothèques : `shiny`, `leaflet`, `httr`, `jsonlite`, `dplyr`.
@@ -68,7 +66,6 @@ Nous faisons les hypothèses suivantes:
 - Seuil de fraîcheur des prix est fixé à **7 jours**, c'est à dire que nous ne prenons pas de prix qui ont été mis à jour il y a plus d'une semaine
 - Pondération de **k=0.5**
 - Le choix de la station repose sur le **score distance-prix**
-```markdown
 ```r
 top15<- top15 %>%
         mutate(cout = calculer_cout(prix, dist, input$conso))
