@@ -72,10 +72,10 @@ Nous faisons les hypothèses suivantes:
 ```r
 top15<- top15 %>%
         mutate(cout = calculer_cout(prix, dist, input$conso))
-      k<- 0.5 
-      top15 <- top15 %>% mutate(score = cout + k * dist)      
-      #on tri par score et on prend des 10 meilleures stations 
-      final <- top15 %>% arrange(score) %>% head(10)
+k<- 0.5 
+top15 <- top15 %>% mutate(score = cout + k * dist)      
+#on tri par score et on prend des 10 meilleures stations 
+final <- top15 %>% arrange(score) %>% head(10)
 ```
 
 ## Conclusion :
