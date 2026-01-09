@@ -3,20 +3,20 @@
 ## Problématique
 Nous nous sommes posé une question : **est-ce possible de trouver la station essence idéale?**, celle qui serait la plus intéressante en termes de distance et de prix. 
 
-Nous avons donc décidé de créer une application Shiny où il suffit d'entrer une adresse donnée pour trouver la station essence qui est un compromis entre la moins loin et la moins chère. On s'est basé sur le prix du carburant, la distance réelle, la consommation du véhicule et l'ancienneté du prix (la dernière mise à jour du prix). 
+Nous avons donc décidé de créer une application Shiny où il suffit d'entrer une adresse donnée et quelques informations sur son véhicule pour trouver la station essence qui est un compromis entre la moins loin et la moins chère. On s'est basé sur le prix du carburant, la distance réelle, la consommation du véhicule et l'ancienneté du prix (la dernière mise à jour du prix). 
 Cette application s'adresse à toute personne souhaitant trouver la station idéale en termes de distance et de prix. 
 
 ## Principales fonctionnalités du code 
 - Conversion d'une adresse texte en coordonnées GPS
 - Récupération des stations services dans un rayon donné autour d'un point GPS
-- Calcul d'une distance routière réelle entre une position et une station
+- Calcul d'une distance à vol d'oiseau et routière réelle entre une position et une station
 - Calcul du coût total et d'un score distance-prix
 - Affichage sur une carte de manière interactive grâce à Leaflet
 - Création d'un tableau comparatif des meilleures stations 
 - Ouverture de Google Maps avec l'itinéraire pour aller à la station
 
 ## Données  et packages utilisés
-Ce projet utilise trois sources de données :
+Ce projet utilise trois sources de données (APIs) :
 - **Nominatim (OpenStreetMap)** permet le **Géocodage**, c'est à dire transformer une adresse textuelle en coordonnées GPS pour que notre application sache où nous sommes positionnés.
 - **API Prix des carburants-data.economie.gouv.fr** permet de récuperer en temps réel des données gouvernementales (open data) concernant le prix des différents carburants 
 - **OSRM (Open Source Routing Machine)** permet le **Calcul d'itinéraire** et des **distances routières réelles**
@@ -33,8 +33,8 @@ Liste des packages utilisés :
 ## Lancement de l'outil
 Avant de lancer l'application, il est nécessaire d'effectuer cette manipulation dans votre console R :
 ```r
-install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet"))
-1. Assurez-vous d'avoir installé les bibliothèques : `shiny`, `leaflet`, `httr`, `jsonlite`, `dplyr`.
+install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet", "geosphere"))
+1. Assurez-vous d'avoir installé les bibliothèques : `shiny`, `shinyjs`, `leaflet`, `httr`, `jsonlite`, `dplyr`,`geosphere`
 2. Lancez l'application dans R :
    ```R
    shiny::runApp()
@@ -42,7 +42,7 @@ install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet"))
 ## Comment utiliser notre application 
 1. Indiquer votre adresse de départ
 2. Indiquer le type de carburant souhaité
-3. Indiquer le rayon de recherche d'une station en km
+3. Choisir le rayon de recherche
 4. Indiquer la consommation de votre véhicule au L/100km
 5. Appuyer sur "Rechercher"
 6. Vous pouvez Appuyer sur "Carte" ou "Résultats" pour avoir le détail des stations sélectionnées
