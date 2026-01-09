@@ -36,7 +36,7 @@ Avant de lancer l'application, il est nécessaire d'effectuer cette manipulation
 ```r
 install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet", "geosphere"))
 ```
-2. Se déplacer dans le fichier ``code R.R``
+2. Se déplacer dans le fichier ``Code R.R``
 3. Lancez l'application dans R :
 ```r
    shiny::runApp()
