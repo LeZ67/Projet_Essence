@@ -17,9 +17,9 @@ knitr::opts_chunk$set(echo = FALSE)
 
 ## Source de données
 
-- **Nominatim (OpenStreetMap)** = sert au géocodage = Transforme adresse (texte) en coordonnées GPS
+- **API Nominatim (OpenStreetMap)** = sert au géocodage = Transforme adresse (texte) en coordonnées GPS
 - **API Flux instantané-data.gouv.fr** = Site du gouvernement pour récupérer les stations et les prix dans toute la France
-- **OSRM (Open Source Routing Machine)** = pour calculer les distances réelles = moteur de calcul d'itinéraire routier 
+- **API OSRM (Open Source Routing Machine)** = pour calculer les distances réelles = moteur de calcul d'itinéraire routier 
 
 ## 2. Logique du code 
 
