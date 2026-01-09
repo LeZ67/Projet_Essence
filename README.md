@@ -32,11 +32,13 @@ Liste des packages utilisés :
   
 ## Lancement de l'outil
 Avant de lancer l'application, il est nécessaire d'effectuer cette manipulation dans votre console R :
+1. Assurez-vous d'avoir installé les bibliothèques : `shiny`, `shinyjs`, `leaflet`, `httr`, `jsonlite`, `dplyr`, `geosphere`
 ```r
 install.packages(c("shiny", "shinyjs", "httr", "jsonlite", "dplyr", "leaflet", "geosphere"))
-1. Assurez-vous d'avoir installé les bibliothèques : `shiny`, `shinyjs`, `leaflet`, `httr`, `jsonlite`, `dplyr`,`geosphere`
-2. Lancez l'application dans R :
-   ```R
+```
+2. Se déplacer dans le fichier ``code R.R``
+3. Lancez l'application dans R :
+```r
    shiny::runApp()
 ```
 ## Comment utiliser notre application 
