@@ -160,7 +160,6 @@ top15$dist  <- sapply(1:nrow(top15), function(i) {
 ## Conclusion
 Notre projet combine données ouvertes, géolocalisation et calculs pour répondre à un besoin concret 
 
-On vous montre comment ça marche ? 
 ```{r, echo=TRUE, eval=FALSE, size="footnotesize"}
 shinyApp(ui, server)
 ```
