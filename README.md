@@ -1,5 +1,5 @@
 # Application de recherche de station essence : Optimisation du plein de carburant
-
+HELLSTERN Alexane, KLEINPETER Zoé, SEITHER Gauthier
 ## Problématique
 Nous nous sommes posé une question : **est-ce possible de trouver la station essence idéale?**, celle qui serait la plus intéressante en termes de distance et de prix. 
 
